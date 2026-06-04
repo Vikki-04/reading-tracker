@@ -11,7 +11,6 @@ const PAGE_DEFAULT_BG =
 const TBR_LIST_BACKGROUND_SRC = '/dark_trial.jpg'
 const TBR_LIST_BG_BRIGHTNESS = 0.75
 const TBR_LIST_FONT_FAMILY = '"Times New Roman", Times, serif'
-const TBR_LIST_SEARCH_MAX_WIDTH_PX = 600
 
 function normalizeTitleKey(title) {
   return String(title ?? '').trim().toLowerCase()
@@ -125,13 +124,6 @@ const styles = {
     borderRadius: 0,
     transform: 'translateY(15px)',
   },
-  formRow: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 140px',
-    gap: 10,
-    alignItems: 'center',
-  },
-  addSeriesRow: { gridColumn: '1 / -1', marginTop: 10 },
   input: {
     width: '100%',
     maxWidth: '100%',
@@ -144,10 +136,7 @@ const styles = {
     background: 'rgba(255, 255, 255, 0.72)',
     backdropFilter: 'blur(8px)',
     color: '#1a1b4b',
-  },
-  searchInput: {
-    maxWidth: TBR_LIST_SEARCH_MAX_WIDTH_PX,
-    display: 'block',
+    boxSizing: 'border-box',
   },
   select: {
     padding: '10px 12px',
@@ -204,6 +193,7 @@ const styles = {
     alignItems: 'baseline',
     justifyContent: 'space-between',
     gap: 8,
+    boxSizing: 'border-box',
   },
   seriesTitle: {
     margin: 0,
@@ -219,6 +209,7 @@ const styles = {
     opacity: 0.92,
     fontFamily: TBR_LIST_FONT_FAMILY,
     fontSize: 17,
+    flexShrink: 0,
   },
   list: {
     listStyle: 'none',
@@ -299,10 +290,7 @@ export function TBRList() {
       setTbr(data)
       setLoading(false)
     })
-
-    const onChange = () => {
-      getTBRBooks().then(setTbr)
-    }
+    const onChange = () => { getTBRBooks().then(setTbr) }
     window.addEventListener('readingTracker:storage', onChange)
     return () => window.removeEventListener('readingTracker:storage', onChange)
   }, [])
@@ -351,40 +339,26 @@ export function TBRList() {
   async function onConfirmFinish() {
     if (!finishingTitle) return
     const title = finishingTitle
-
     const currentRead = await getReadBooks()
     const nextReadYear = currentRead[finishYear] ?? []
-    const exists = nextReadYear.some(
-      (t) => normalizeTitleKey(t) === normalizeTitleKey(title),
-    )
+    const exists = nextReadYear.some((t) => normalizeTitleKey(t) === normalizeTitleKey(title))
     const nextRead = exists
       ? currentRead
       : { ...currentRead, [finishYear]: [...nextReadYear, title] }
     await saveReadBooks(nextRead)
-
-    const nextTbr = tbr.filter(
-      (b) => normalizeTitleKey(b.title) !== normalizeTitleKey(title),
-    )
+    const nextTbr = tbr.filter((b) => normalizeTitleKey(b.title) !== normalizeTitleKey(title))
     setTbr(nextTbr)
     await saveTBRBooks(nextTbr)
-
     setFinishingTitle(null)
   }
 
-  function onCancelFinish() {
-    setFinishingTitle(null)
-  }
+  function onCancelFinish() { setFinishingTitle(null) }
 
   async function onDeleteTbr(title) {
-    const nextTbr = tbr.filter(
-      (b) => normalizeTitleKey(b.title) !== normalizeTitleKey(title),
-    )
+    const nextTbr = tbr.filter((b) => normalizeTitleKey(b.title) !== normalizeTitleKey(title))
     setTbr(nextTbr)
     await saveTBRBooks(nextTbr)
-    if (
-      finishingTitle &&
-      normalizeTitleKey(finishingTitle) === normalizeTitleKey(title)
-    ) {
+    if (finishingTitle && normalizeTitleKey(finishingTitle) === normalizeTitleKey(title)) {
       setFinishingTitle(null)
     }
   }
@@ -395,13 +369,72 @@ export function TBRList() {
 
   const isSearching = query.trim().length > 0
   const standaloneBooks = grouped.standalone
-  const standaloneCollapsed =
-    isSearching ? false : collapsedSeries[STANDALONE_TBR_KEY] !== false
+  const standaloneCollapsed = isSearching ? false : collapsedSeries[STANDALONE_TBR_KEY] !== false
   const showPhotoBg = TBR_LIST_BACKGROUND_SRC.length > 0
   const pageShellStyle = { ...styles.pageShell, background: PAGE_DEFAULT_BG }
 
+  const bookList = (books) => books.map((b) => {
+    const isFinishing = finishingTitle === b.title
+    return (
+      <li key={normalizeTitleKey(b.title)} style={styles.bookItem}>
+        <input
+          type="checkbox"
+          checked={false}
+          onChange={() => onCheck(b.title)}
+          aria-label={`Mark "${b.title}" as finished`}
+        />
+        <div>
+          <p style={styles.bookTitle}>{b.title}</p>
+          {isFinishing ? (
+            <div style={styles.finishPrompt}>
+              <p style={styles.promptLabel}>Which year did you finish this?</p>
+              <select value={finishYear} onChange={(e) => setFinishYear(e.target.value)} style={styles.select}>
+                {YEAR_OPTIONS.map((y) => <option key={y} value={y}>{y}</option>)}
+              </select>
+              <button type="button" style={styles.button} onClick={onConfirmFinish}>
+                Move to Reading Log
+              </button>
+              <button type="button" style={styles.buttonGhost} onClick={onCancelFinish}>
+                Cancel
+              </button>
+            </div>
+          ) : null}
+        </div>
+        <button
+          type="button"
+          onClick={() => onDeleteTbr(b.title)}
+          aria-label={`Delete "${b.title}" from TBR`}
+          title="Delete"
+          style={styles.deleteBtn}
+        >✕</button>
+      </li>
+    )
+  })
+
   return (
     <div style={pageShellStyle}>
+      {/* Mobile responsive styles */}
+      <style>{`
+        @media (max-width: 600px) {
+          .tbr-title { font-size: 28px !important; }
+          .tbr-total { font-size: 15px !important; }
+          .tbr-subtitle { font-size: 15px !important; }
+          .tbr-form-row {
+            display: grid !important;
+            grid-template-columns: 1fr !important;
+            gap: 8px !important;
+          }
+          .tbr-search {
+            width: 100% !important;
+            max-width: 100% !important;
+            box-sizing: border-box !important;
+          }
+          .tbr-list {
+            grid-template-columns: 1fr !important;
+          }
+        }
+      `}</style>
+
       {showPhotoBg ? (
         <>
           <img
@@ -422,17 +455,22 @@ export function TBRList() {
         <header style={styles.pageHeader}>
           <div style={styles.titleRow}>
             <div style={styles.titleRowSpacer} aria-hidden="true" />
-            <h1 style={styles.title}>TBR List</h1>
-            <p style={styles.total}>
+            <h1 style={styles.title} className="tbr-title">TBR List</h1>
+            <p style={styles.total} className="tbr-total">
               📋 {tbr.length} {tbr.length === 1 ? 'book' : 'books'}
             </p>
           </div>
-          <p style={styles.subtitle}>Books waiting for you—organized by series.</p>
+          <p style={styles.subtitle} className="tbr-subtitle">
+            Books waiting for you—organized by series.
+          </p>
         </header>
 
         <section style={styles.formStrip} aria-label="Add to TBR">
           <form onSubmit={onAddTbr}>
-            <div style={styles.formRow}>
+            <div
+              style={{ display: 'grid', gridTemplateColumns: '1fr 140px', gap: 10, alignItems: 'center' }}
+              className="tbr-form-row"
+            >
               <input
                 value={newTitle}
                 onChange={(e) => setNewTitle(e.target.value)}
@@ -446,7 +484,7 @@ export function TBRList() {
                 onChange={(e) => setNewSeries(e.target.value)}
                 placeholder="Series (optional)"
                 aria-label="Series name optional"
-                style={{ ...styles.input, ...styles.addSeriesRow, width: '98.2%' }}
+                style={{ ...styles.input, gridColumn: '1 / -1', marginTop: 10 }}
               />
             </div>
           </form>
@@ -458,14 +496,15 @@ export function TBRList() {
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search by title or series…"
             aria-label="Search TBR"
-            style={{ ...styles.input, width: 1427 }}
+            style={{ ...styles.input, width: '100%', maxWidth: 600 }}
+            className="tbr-search"
           />
         </section>
 
         {loading ? (
           <div style={styles.loading}>Loading your TBR list…</div>
         ) : filtered.length === 0 ? (
-          <section style={styles.sections} aria-label="TBR books">
+          <section style={styles.sections}>
             <div style={styles.empty}>No matching books or series.</div>
           </section>
         ) : (
@@ -473,7 +512,6 @@ export function TBRList() {
             {grouped.seriesNames.map((seriesName) => {
               const books = grouped.bySeries[seriesName] ?? []
               const collapsed = isSearching ? false : collapsedSeries[seriesName] !== false
-
               return (
                 <section key={seriesName} style={styles.seriesSection} aria-label={`${seriesName} books`}>
                   <button
@@ -489,52 +527,9 @@ export function TBRList() {
                       {books.length} {books.length === 1 ? 'book' : 'books'}
                     </p>
                   </button>
-
                   {collapsed ? null : (
-                    <ul style={styles.list}>
-                      {books.map((b) => {
-                        const isFinishing = finishingTitle === b.title
-                        return (
-                          <li key={normalizeTitleKey(b.title)} style={styles.bookItem}>
-                            <input
-                              type="checkbox"
-                              checked={false}
-                              onChange={() => onCheck(b.title)}
-                              aria-label={`Mark "${b.title}" as finished`}
-                            />
-                            <div>
-                              <p style={styles.bookTitle}>{b.title}</p>
-                              {isFinishing ? (
-                                <div style={styles.finishPrompt}>
-                                  <p style={styles.promptLabel}>Which year did you finish this?</p>
-                                  <select
-                                    value={finishYear}
-                                    onChange={(e) => setFinishYear(e.target.value)}
-                                    style={styles.select}
-                                  >
-                                    {YEAR_OPTIONS.map((y) => (
-                                      <option key={y} value={y}>{y}</option>
-                                    ))}
-                                  </select>
-                                  <button type="button" style={styles.button} onClick={onConfirmFinish}>
-                                    Move to Reading Log
-                                  </button>
-                                  <button type="button" style={styles.buttonGhost} onClick={onCancelFinish}>
-                                    Cancel
-                                  </button>
-                                </div>
-                              ) : null}
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => onDeleteTbr(b.title)}
-                              aria-label={`Delete "${b.title}" from TBR`}
-                              title="Delete"
-                              style={styles.deleteBtn}
-                            >✕</button>
-                          </li>
-                        )
-                      })}
+                    <ul style={styles.list} className="tbr-list">
+                      {bookList(books)}
                     </ul>
                   )}
                 </section>
@@ -556,52 +551,9 @@ export function TBRList() {
                     {standaloneBooks.length} {standaloneBooks.length === 1 ? 'book' : 'books'}
                   </p>
                 </button>
-
                 {standaloneCollapsed ? null : (
-                  <ul style={styles.list}>
-                    {standaloneBooks.map((b) => {
-                      const isFinishing = finishingTitle === b.title
-                      return (
-                        <li key={normalizeTitleKey(b.title)} style={styles.bookItem}>
-                          <input
-                            type="checkbox"
-                            checked={false}
-                            onChange={() => onCheck(b.title)}
-                            aria-label={`Mark "${b.title}" as finished`}
-                          />
-                          <div>
-                            <p style={styles.bookTitle}>{b.title}</p>
-                            {isFinishing ? (
-                              <div style={styles.finishPrompt}>
-                                <p style={styles.promptLabel}>Which year did you finish this?</p>
-                                <select
-                                  value={finishYear}
-                                  onChange={(e) => setFinishYear(e.target.value)}
-                                  style={styles.select}
-                                >
-                                  {YEAR_OPTIONS.map((y) => (
-                                    <option key={y} value={y}>{y}</option>
-                                  ))}
-                                </select>
-                                <button type="button" style={styles.button} onClick={onConfirmFinish}>
-                                  Move to Reading Log
-                                </button>
-                                <button type="button" style={styles.buttonGhost} onClick={onCancelFinish}>
-                                  Cancel
-                                </button>
-                              </div>
-                            ) : null}
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => onDeleteTbr(b.title)}
-                            aria-label={`Delete "${b.title}" from TBR`}
-                            title="Delete"
-                            style={styles.deleteBtn}
-                          >✕</button>
-                        </li>
-                      )
-                    })}
+                  <ul style={styles.list} className="tbr-list">
+                    {bookList(standaloneBooks)}
                   </ul>
                 )}
               </section>

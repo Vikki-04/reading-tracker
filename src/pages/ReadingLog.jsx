@@ -14,7 +14,6 @@ const PAGE_DEFAULT_BG =
 const READING_LOG_BACKGROUND_SRC = '/trial.jpg'
 const READING_LOG_BG_BRIGHTNESS = 0.75
 const READING_LOG_FONT_FAMILY = '"Times New Roman", Times, serif'
-const READING_LOG_SEARCH_MAX_WIDTH_PX = 500
 
 const styles = {
   pageShell: {
@@ -111,12 +110,6 @@ const styles = {
     borderRadius: 0,
     transform: 'translateY(15px)',
   },
-  formRow: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 200px 140px',
-    gap: 10,
-    alignItems: 'center',
-  },
   input: {
     width: '100%',
     maxWidth: '100%',
@@ -129,10 +122,7 @@ const styles = {
     background: 'rgba(255, 255, 255, 0.72)',
     backdropFilter: 'blur(8px)',
     color: '#1a1b4b',
-  },
-  searchInput: {
-    maxWidth: READING_LOG_SEARCH_MAX_WIDTH_PX,
-    display: 'block',
+    boxSizing: 'border-box',
   },
   select: {
     width: '100%',
@@ -145,6 +135,7 @@ const styles = {
     background: '#a18770',
     backdropFilter: 'blur(8px)',
     color: '#fcfaf7',
+    boxSizing: 'border-box',
   },
   button: {
     width: '100%',
@@ -157,6 +148,7 @@ const styles = {
     fontSize: 14,
     fontFamily: READING_LOG_FONT_FAMILY,
     cursor: 'pointer',
+    boxSizing: 'border-box',
   },
   sections: { marginTop: 18, display: 'grid', gap: 20 },
   yearSection: {
@@ -302,11 +294,9 @@ export function ReadingLog() {
     e.preventDefault()
     const trimmed = title.trim()
     if (!trimmed) return
-
     const nextYearList = readByYear[year] ?? []
     const exists = nextYearList.some((t) => normalizeTitleKey(t) === normalizeTitleKey(trimmed))
     if (exists) { setTitle(''); return }
-
     const next = { ...readByYear, [year]: [...nextYearList, trimmed] }
     setReadByYear(next)
     await saveReadBooks(next)
@@ -327,7 +317,6 @@ export function ReadingLog() {
     const nextRead = { ...readByYear, [yearKey]: nextList }
     setReadByYear(nextRead)
     await saveReadBooks(nextRead)
-
     const currentTbr = await getTBRBooks()
     const exists = currentTbr.some((b) => normalizeTitleKey(b.title) === normalizeTitleKey(bookTitle))
     if (!exists) {
@@ -341,6 +330,31 @@ export function ReadingLog() {
 
   return (
     <div style={pageShellStyle}>
+      {/* Mobile responsive styles */}
+      <style>{`
+        @media (max-width: 600px) {
+          .rl-title { font-size: 28px !important; }
+          .rl-total { font-size: 15px !important; }
+          .rl-subtitle { font-size: 15px !important; }
+          .rl-form-row {
+            display: grid !important;
+            grid-template-columns: 1fr 1fr !important;
+            gap: 8px !important;
+          }
+          .rl-form-row input {
+            grid-column: 1 / -1 !important;
+          }
+          .rl-search {
+            max-width: 100% !important;
+            width: 100% !important;
+            box-sizing: border-box !important;
+          }
+          .rl-list {
+            grid-template-columns: 1fr !important;
+          }
+        }
+      `}</style>
+
       {showPhotoBg ? (
         <>
           <img
@@ -361,17 +375,22 @@ export function ReadingLog() {
         <header style={styles.pageHeader}>
           <div style={styles.titleRow}>
             <div style={styles.titleRowSpacer} aria-hidden="true" />
-            <h1 style={styles.title}>Reading Log</h1>
-            <p style={styles.total}>
+            <h1 style={styles.title} className="rl-title">Reading Log</h1>
+            <p style={styles.total} className="rl-total">
               ✅ {totalRead} {totalRead === 1 ? 'book' : 'books'} read
             </p>
           </div>
-          <p style={styles.subtitle}>Track what you've finished, grouped by year.</p>
+          <p style={styles.subtitle} className="rl-subtitle">
+            Track what you've finished, grouped by year.
+          </p>
         </header>
 
         <section style={styles.formStrip} aria-label="Add a book">
           <form onSubmit={onSubmit}>
-            <div style={styles.formRow}>
+            <div
+              style={{ display: 'grid', gridTemplateColumns: '1fr 200px 140px', gap: 10, alignItems: 'center' }}
+              className="rl-form-row"
+            >
               <input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
@@ -395,7 +414,8 @@ export function ReadingLog() {
             onChange={(e) => setLogQuery(e.target.value)}
             placeholder="Search by title or series…"
             aria-label="Search reading log"
-            style={{ ...styles.input, ...styles.searchInput }}
+            style={{ ...styles.input, maxWidth: 500, display: 'block' }}
+            className="rl-search"
           />
         </section>
 
@@ -421,7 +441,7 @@ export function ReadingLog() {
                         : 'No books match your search.'}
                     </div>
                   ) : (
-                    <ul style={styles.list}>
+                    <ul style={styles.list} className="rl-list">
                       {books.map((book) => (
                         <li key={`${y}:${book}`} style={styles.bookItem}>
                           <span style={styles.bookEmoji} aria-hidden="true">📖</span>

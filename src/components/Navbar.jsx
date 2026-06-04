@@ -27,19 +27,11 @@ const styles = {
     color: '#fff',
     textDecoration: 'none',
     letterSpacing: '0.2px',
-    flex: '1 1 0%',
+    flex: '0 0 auto',
     minWidth: 0,
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
   },
-  brandIcon: { filter: 'drop-shadow(0 1px 0 rgba(0,0,0,0.35))' , marginRight:6},
   brandText: {
     display: 'block',
-    minWidth: 0,
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
     fontWeight: 800,
     fontSize: 25,
     fontFamily: '"Times New Roman", Times, serif',
@@ -70,9 +62,6 @@ const styles = {
     background: 'rgba(255,255,255,0.24)',
     borderColor: 'rgba(255,255,255,0.40)',
   },
-  tbrLink: {
-    marginLeft: 0,
-  },
 }
 
 function linkStyle({ isActive }) {
@@ -82,15 +71,39 @@ function linkStyle({ isActive }) {
 export function Navbar() {
   return (
     <header style={styles.header}>
-      <div style={styles.inner}>
+      <style>{`
+        @media (max-width: 600px) {
+          .navbar-inner {
+            flex-direction: column !important;
+            align-items: stretch !important;
+            gap: 10px !important;
+            padding: 10px 12px !important;
+          }
+          .navbar-brand-text {
+            font-size: 20px !important;
+            text-align: center !important;
+          }
+          .navbar-nav {
+            justify-content: center !important;
+            flex-wrap: wrap !important;
+          }
+          .navbar-nav a {
+            font-size: 13px !important;
+            padding: 6px 10px !important;
+          }
+        }
+      `}</style>
+      <div style={styles.inner} className="navbar-inner">
         <Link to="/" style={styles.brand} aria-label="Reading Tracker home">
-          <span style={styles.brandText}>Reading Tracker</span>
+          <span style={styles.brandText} className="navbar-brand-text">
+            Reading Tracker
+          </span>
         </Link>
-        <nav style={styles.nav} aria-label="Primary">
+        <nav style={styles.nav} aria-label="Primary" className="navbar-nav">
           <NavLink to="/" end style={linkStyle}>
             Reading Log
           </NavLink>
-          <NavLink to="/tbr" style={(args) => ({ ...linkStyle(args), ...styles.tbrLink })}>
+          <NavLink to="/tbr" style={linkStyle}>
             TBR List
           </NavLink>
           <NavLink to="/dashboard" style={linkStyle}>
@@ -101,4 +114,3 @@ export function Navbar() {
     </header>
   )
 }
-
