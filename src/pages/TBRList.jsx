@@ -3,29 +3,15 @@ import { useEffect, useMemo, useState } from 'react'
 import { getReadBooks, getTBRBooks, saveReadBooks, saveTBRBooks } from '../data/storage.js'
 
 const YEAR_OPTIONS = ['2026', '2025', '2024', '2023', 'Previous Years']
-
-/** Collapse state key for standalone TBR books (not a real series name). */
 const STANDALONE_TBR_KEY = '__reading_tracker_standalone__'
 
 const PAGE_DEFAULT_BG =
   'radial-gradient(1100px 500px at 20% 0%, rgba(84, 58, 183, 0.18), transparent 55%), radial-gradient(900px 450px at 80% 10%, rgba(26, 27, 75, 0.16), transparent 52%), #f6f5ff'
 
-/**
- * Reading Log background: must be a WEB path starting with `/`, not a Windows path.
- * Put the image file inside the `public` folder next to `favicon.svg`, then set the
- * path here to `/` + filename (e.g. file `public/library-bg.jpg` → `'/library-bg.jpg'`).
- * Use '' for no photo (purple gradient only).
- */
 const TBR_LIST_BACKGROUND_SRC = '/dark_trial.jpg'
-
-/** Photo darkness: lower = darker image (0.55–1). Only affects the picture layer. */
 const TBR_LIST_BG_BRIGHTNESS = 0.75
-
 const TBR_LIST_FONT_FAMILY = '"Times New Roman", Times, serif'
-
-/** Search field: max width in px (bar grows with page up to this). */
 const TBR_LIST_SEARCH_MAX_WIDTH_PX = 600
-
 
 function normalizeTitleKey(title) {
   return String(title ?? '').trim().toLowerCase()
@@ -65,7 +51,6 @@ const styles = {
     zIndex: 0,
     userSelect: 'none',
   },
-  // Softer wash = photo reads stronger. Raise alphas (e.g. 0.55 → 0.75) if text feels hard to read.
   pageBgOverlay: {
     position: 'absolute',
     inset: 0,
@@ -290,23 +275,34 @@ const styles = {
     color: 'rgba(26, 27, 75, 0.82)',
     textShadow: '0 0 14px rgba(255,255,255,0.88)',
   },
+  loading: {
+    padding: '40px 0',
+    textAlign: 'center',
+    color: '#ebdecc',
+    fontSize: 18,
+    fontFamily: TBR_LIST_FONT_FAMILY,
+  },
 }
 
 export function TBRList() {
   const [tbr, setTbr] = useState([])
+  const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState('')
   const [newTitle, setNewTitle] = useState('')
   const [newSeries, setNewSeries] = useState('')
   const [collapsedSeries, setCollapsedSeries] = useState({})
-
   const [finishingTitle, setFinishingTitle] = useState(null)
   const [finishYear, setFinishYear] = useState('2026')
 
   useEffect(() => {
-    // Ensure storage is seeded/migrated, then load.
-    setTbr(getTBRBooks())
+    getTBRBooks().then((data) => {
+      setTbr(data)
+      setLoading(false)
+    })
 
-    const onChange = () => setTbr(getTBRBooks())
+    const onChange = () => {
+      getTBRBooks().then(setTbr)
+    }
     window.addEventListener('readingTracker:storage', onChange)
     return () => window.removeEventListener('readingTracker:storage', onChange)
   }, [])
@@ -335,16 +331,14 @@ export function TBRList() {
     return { seriesNames, bySeries, standalone }
   }, [filtered])
 
-  function onAddTbr(e) {
+  async function onAddTbr(e) {
     e.preventDefault()
     const trimmed = newTitle.trim()
     if (!trimmed) return
-
-    const seriesTrimmed = newSeries.trim()
-    const series = seriesTrimmed ? seriesTrimmed : null
+    const series = newSeries.trim() || null
     const next = dedupeTbr([...tbr, { title: trimmed, series }])
     setTbr(next)
-    saveTBRBooks(next)
+    await saveTBRBooks(next)
     setNewTitle('')
     setNewSeries('')
   }
@@ -354,23 +348,25 @@ export function TBRList() {
     setFinishYear('2026')
   }
 
-  function onConfirmFinish() {
+  async function onConfirmFinish() {
     if (!finishingTitle) return
     const title = finishingTitle
 
-    // 1) Add to reading log (shared storage)
-    const currentRead = getReadBooks()
+    const currentRead = await getReadBooks()
     const nextReadYear = currentRead[finishYear] ?? []
-    const exists = nextReadYear.some((t) => normalizeTitleKey(t) === normalizeTitleKey(title))
+    const exists = nextReadYear.some(
+      (t) => normalizeTitleKey(t) === normalizeTitleKey(title),
+    )
     const nextRead = exists
       ? currentRead
       : { ...currentRead, [finishYear]: [...nextReadYear, title] }
-    saveReadBooks(nextRead)
+    await saveReadBooks(nextRead)
 
-    // 2) Remove from TBR (shared storage)
-    const nextTbr = tbr.filter((b) => normalizeTitleKey(b.title) !== normalizeTitleKey(title))
+    const nextTbr = tbr.filter(
+      (b) => normalizeTitleKey(b.title) !== normalizeTitleKey(title),
+    )
     setTbr(nextTbr)
-    saveTBRBooks(nextTbr)
+    await saveTBRBooks(nextTbr)
 
     setFinishingTitle(null)
   }
@@ -379,34 +375,30 @@ export function TBRList() {
     setFinishingTitle(null)
   }
 
-  function onDeleteTbr(title) {
-    const nextTbr = tbr.filter((b) => normalizeTitleKey(b.title) !== normalizeTitleKey(title))
+  async function onDeleteTbr(title) {
+    const nextTbr = tbr.filter(
+      (b) => normalizeTitleKey(b.title) !== normalizeTitleKey(title),
+    )
     setTbr(nextTbr)
-    saveTBRBooks(nextTbr)
-    if (finishingTitle && normalizeTitleKey(finishingTitle) === normalizeTitleKey(title)) {
+    await saveTBRBooks(nextTbr)
+    if (
+      finishingTitle &&
+      normalizeTitleKey(finishingTitle) === normalizeTitleKey(title)
+    ) {
       setFinishingTitle(null)
     }
   }
 
   function toggleSeries(name) {
-    // Default is collapsed; missing key means collapsed. First click expands (false).
     setCollapsedSeries((prev) => ({ ...prev, [name]: !(prev[name] ?? true) }))
   }
 
   const isSearching = query.trim().length > 0
-
   const standaloneBooks = grouped.standalone
   const standaloneCollapsed =
     isSearching ? false : collapsedSeries[STANDALONE_TBR_KEY] !== false
-
   const showPhotoBg = TBR_LIST_BACKGROUND_SRC.length > 0
-
-  /** Always paint PAGE_DEFAULT_BG on the shell so the first frame isn’t transparent while
-   * `background-image` on the layer above is still loading (avoids flash of body/root color). */
-  const pageShellStyle = {
-    ...styles.pageShell,
-    background: PAGE_DEFAULT_BG,
-  }
+  const pageShellStyle = { ...styles.pageShell, background: PAGE_DEFAULT_BG }
 
   return (
     <div style={pageShellStyle}>
@@ -448,15 +440,13 @@ export function TBRList() {
                 aria-label="New TBR book title"
                 style={styles.input}
               />
-              <button type="submit" style={styles.button}>
-                Add to TBR
-              </button>
+              <button type="submit" style={styles.button}>Add to TBR</button>
               <input
                 value={newSeries}
                 onChange={(e) => setNewSeries(e.target.value)}
                 placeholder="Series (optional)"
                 aria-label="Series name optional"
-                style={{ ...styles.input, ...styles.addSeriesRow, width:'98.2%' }}
+                style={{ ...styles.input, ...styles.addSeriesRow, width: '98.2%' }}
               />
             </div>
           </form>
@@ -472,7 +462,9 @@ export function TBRList() {
           />
         </section>
 
-        {filtered.length === 0 ? (
+        {loading ? (
+          <div style={styles.loading}>Loading your TBR list…</div>
+        ) : filtered.length === 0 ? (
           <section style={styles.sections} aria-label="TBR books">
             <div style={styles.empty}>No matching books or series.</div>
           </section>
@@ -481,7 +473,6 @@ export function TBRList() {
             {grouped.seriesNames.map((seriesName) => {
               const books = grouped.bySeries[seriesName] ?? []
               const collapsed = isSearching ? false : collapsedSeries[seriesName] !== false
-              const visible = collapsed ? [] : books
 
               return (
                 <section key={seriesName} style={styles.seriesSection} aria-label={`${seriesName} books`}>
@@ -501,9 +492,8 @@ export function TBRList() {
 
                   {collapsed ? null : (
                     <ul style={styles.list}>
-                      {visible.map((b) => {
+                      {books.map((b) => {
                         const isFinishing = finishingTitle === b.title
-
                         return (
                           <li key={normalizeTitleKey(b.title)} style={styles.bookItem}>
                             <input
@@ -512,10 +502,8 @@ export function TBRList() {
                               onChange={() => onCheck(b.title)}
                               aria-label={`Mark "${b.title}" as finished`}
                             />
-
                             <div>
                               <p style={styles.bookTitle}>{b.title}</p>
-
                               {isFinishing ? (
                                 <div style={styles.finishPrompt}>
                                   <p style={styles.promptLabel}>Which year did you finish this?</p>
@@ -523,12 +511,9 @@ export function TBRList() {
                                     value={finishYear}
                                     onChange={(e) => setFinishYear(e.target.value)}
                                     style={styles.select}
-                                    aria-label="Finish year"
                                   >
                                     {YEAR_OPTIONS.map((y) => (
-                                      <option key={y} value={y}>
-                                        {y}
-                                      </option>
+                                      <option key={y} value={y}>{y}</option>
                                     ))}
                                   </select>
                                   <button type="button" style={styles.button} onClick={onConfirmFinish}>
@@ -540,16 +525,13 @@ export function TBRList() {
                                 </div>
                               ) : null}
                             </div>
-
                             <button
                               type="button"
                               onClick={() => onDeleteTbr(b.title)}
                               aria-label={`Delete "${b.title}" from TBR`}
                               title="Delete"
                               style={styles.deleteBtn}
-                            >
-                              ✕
-                            </button>
+                            >✕</button>
                           </li>
                         )
                       })}
@@ -579,7 +561,6 @@ export function TBRList() {
                   <ul style={styles.list}>
                     {standaloneBooks.map((b) => {
                       const isFinishing = finishingTitle === b.title
-
                       return (
                         <li key={normalizeTitleKey(b.title)} style={styles.bookItem}>
                           <input
@@ -588,10 +569,8 @@ export function TBRList() {
                             onChange={() => onCheck(b.title)}
                             aria-label={`Mark "${b.title}" as finished`}
                           />
-
                           <div>
                             <p style={styles.bookTitle}>{b.title}</p>
-
                             {isFinishing ? (
                               <div style={styles.finishPrompt}>
                                 <p style={styles.promptLabel}>Which year did you finish this?</p>
@@ -599,12 +578,9 @@ export function TBRList() {
                                   value={finishYear}
                                   onChange={(e) => setFinishYear(e.target.value)}
                                   style={styles.select}
-                                  aria-label="Finish year"
                                 >
                                   {YEAR_OPTIONS.map((y) => (
-                                    <option key={y} value={y}>
-                                      {y}
-                                    </option>
+                                    <option key={y} value={y}>{y}</option>
                                   ))}
                                 </select>
                                 <button type="button" style={styles.button} onClick={onConfirmFinish}>
@@ -616,16 +592,13 @@ export function TBRList() {
                               </div>
                             ) : null}
                           </div>
-
                           <button
                             type="button"
                             onClick={() => onDeleteTbr(b.title)}
                             aria-label={`Delete "${b.title}" from TBR`}
                             title="Delete"
                             style={styles.deleteBtn}
-                          >
-                            ✕
-                          </button>
+                          >✕</button>
                         </li>
                       )
                     })}
@@ -637,6 +610,5 @@ export function TBRList() {
         )}
       </div>
     </div>
-    )
-  }
-
+  )
+}
